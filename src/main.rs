@@ -6,34 +6,40 @@ use core::panic::PanicInfo;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    let result: i64;
+    let result: usize;
+    let new_brk: usize;
+    let chunk_size: usize; // à déplacer dans les arguments /!\
+    chunk_size = 300; // TEST à supprimer !!!!!!!!!!!!!!!!!!!
 
     unsafe {
         core::arch::asm!(
-            "mov rax, 12",      // Syscall brk()
+            "mov rax, 0xc",      // Syscall brk()
             "mov rdi, 0",
             "syscall",
             "mov {}, rax",       // Stocker le résultat de rax dans la variable result
             out(reg) result,     // Associer le registre de sortie à result
             options(nostack, preserves_flags)
         );
-    
+        
+        // result contient l'adresse de brk
 
-    // result contient l'adresse de brk
+        // On modifie brk pour créer une heap
+        // D'abord, calculer la nouvelle adresse
+        new_brk = result + chunk_size;
 
-        // Utilise la valeur de result dans un autre appel système
         core::arch::asm!(
-            "mov rax, 1",        // Syscall pour write (stdout)
-            "mov rdi, 1",        // Descripteur de fichier pour stdout
-            "mov rsi, {0}",      // Adresse du buffer (result)
-            "mov rdx, 8",        // Nombre d'octets à écrire (8 pour i64)
+            "mov rax, 12",        // brk
             "syscall",
-            in(reg) &result,     // Passe l'adresse de "result" à rsi
+            in("rdi") &new_brk,     // Passe l'adresse de "result" à rdi
             options(nostack, preserves_flags)
         );
     }
 
+    // À chaque nouvelle allocation
+    // On vérifie que l'adresse du futur chunk ne dépassera pas brk
+    // Si le chunk dépasse, on bouge brk
     loop {}
+    
 }
 
 #[panic_handler]
