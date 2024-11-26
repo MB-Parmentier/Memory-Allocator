@@ -1,8 +1,45 @@
 #![no_std]
 #![no_main]
 use core::panic::PanicInfo;
+pub mod bump;
 /// Ce code implante un allocateur dynamique sans la libraire standard
 /// On utilise le trait Global Allocator
+
+/// Structure représentant les parties de la heap libérées
+/// Elles seront donc réutilisables pour les prochaines allocations
+#[derive(Debug, Default, Copy, Clone)]
+struct Chunk {
+    addr: usize,
+    size: usize,
+}
+
+/// Créer un empty chunk permet d'initialiser le tableau
+const EMPTY_CHUNK: Chunk = Chunk { addr: 0, size: 0 };
+static mut FREED_CHUNKS: [Chunk; 30] = [EMPTY_CHUNK; 30];
+
+/// Parcourir le tableau à la recherche d'un chunk adapté
+/// Retourner l'adresse du chunk à réutiliser
+#[no_mangle]
+pub extern "C" fn fill(chunk_size: usize) -> usize {
+    let mut new_addr: usize = 0x00; // Valeur par défaut, si elle reste ainsi...
+    // Alors aucun chunk ne convient et il faudra bouger brk
+    let mut ppt: usize = 0; // Plus petite des grandes tailles
+    
+    // Note: Utilisation de unsafe car on modifie un static mut
+    unsafe {
+        for chunk in FREED_CHUNKS.iter_mut() {
+            if chunk.size > chunk_size {
+                // grand mais utilisable
+                new_addr = chunk.addr;
+                ppt = chunk.size;
+            } else if chunk.size == chunk_size {
+                new_addr = chunk.addr;
+                break; // Si la taille est exacte, on arrête de chercher plus loin
+            }
+        }
+    }
+    new_addr
+}
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
